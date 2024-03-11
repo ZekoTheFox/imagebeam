@@ -6,8 +6,14 @@ import (
 	http "net/http"
 )
 
+type Image struct {
+	Url string
+}
+
+var Images chan Image = make(chan Image)
+
 func StartWebAPI(port int) {
-	http.HandleFunc("/api/image", handleImage)
+	http.HandleFunc("GET /images", handleImage)
 
 	address := "127.0.0.1:" + fmt.Sprint(port)
 
