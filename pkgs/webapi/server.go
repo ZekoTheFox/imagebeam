@@ -11,9 +11,10 @@ type Image struct {
 }
 
 var Images chan Image = make(chan Image)
+var imageCache chan []byte = make(chan []byte)
 
 func StartWebAPI(port int) {
-	http.HandleFunc("GET /images", handleImage)
+	http.HandleFunc("GET /image", handleImage)
 
 	address := "127.0.0.1:" + fmt.Sprint(port)
 

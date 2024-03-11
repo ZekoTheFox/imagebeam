@@ -1,11 +1,194 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> imagebeam overlay </title>
-</head>
-<body>
-    <!-- to be implemented -->
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>imagebeam overlay</title>
+
+        <!-- default obs browser source css -->
+        <style>
+            body {
+                background-color: rgba(0, 0, 0, 0);
+                margin: 0px auto;
+                overflow: hidden;
+            }
+        </style>
+        <!-- css reset (probably not needed) -->
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
+            * {
+                margin: 0;
+            }
+            body {
+                line-height: 1.5;
+                -webkit-font-smoothing: antialiased;
+            }
+            img,
+            picture,
+            video,
+            canvas,
+            svg {
+                display: block;
+                max-width: 100%;
+            }
+            input,
+            button,
+            textarea,
+            select {
+                font: inherit;
+            }
+            p,
+            h1,
+            h2,
+            h3,
+            h4,
+            h5,
+            h6 {
+                overflow-wrap: break-word;
+            }
+            #root,
+            #__next {
+                isolation: isolate;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="root"></div>
+        <div id="staged"></div>
+        <!-- main content css -->
+        <style>
+            :root {
+                --animation-duration: 3s;
+                --box-shadow: rgba(0, 0, 0, 0.1) 0px 0px 3px;
+                --corner-radius: 4px;
+                --max-image-width: 300px;
+            }
+
+            #root {
+                width: 100%;
+                height: 100vh;
+
+                position: relative;
+            }
+
+            #staged {
+                overflow: hidden;
+            }
+
+            img {
+                opacity: 0;
+                position: absolute;
+
+                max-width: var(--max-image-width);
+
+                animation: var(--animation-duration) ease-in-out 150ms
+                    phase-fade forwards;
+
+                box-shadow: var(--box-shadow);
+                border-radius: var(--corner-radius);
+            }
+
+            @keyframes phase-fade {
+                0% {
+                    opacity: 0;
+                }
+                20% {
+                    opacity: 1;
+                }
+                80% {
+                    opacity: 1;
+                }
+                100% {
+                    opacity: 0;
+                }
+            }
+        </style>
+        <!-- main script -->
+        <script>
+            function id(string) {
+                return document.getElementById(string);
+            }
+
+            function clamp(number, min, max) {
+                return Math.min(Math.max(number, min), max);
+            }
+
+            function randomPercent() {
+                return Math.round(Math.random() * 100);
+            }
+
+            const root = id("root");
+            const staged = id("staged");
+
+            /** @param {string} url */
+            function displayImage(url) {
+                const element = document.createElement("img");
+                staged.appendChild(element);
+
+                element.src = url;
+                element.setAttribute("data-timestamp", Date.now());
+
+                // delay actually setting the image properties; the width/height isn't know until the image finishes loading
+                element.onload = function reposition() {
+                    const maxWidth = root.clientWidth - element.width;
+                    const maxHeight = root.clientHeight - element.height;
+                    const xPercent =
+                        (randomPercent() * maxWidth) / root.clientWidth;
+                    const yPercent =
+                        (randomPercent() * maxHeight) / root.clientHeight;
+
+                    element.style.left = xPercent + "%";
+                    element.style.top = yPercent + "%";
+
+                    root.appendChild(staged.firstChild);
+                };
+            }
+
+            // poll for image
+            setInterval(async function pollImage() {
+                const image = await fetch("http://127.0.0.1:8440/image")
+                    .then(function handleResponse(res) {
+                        return res.blob();
+                    })
+                    .catch(function handleError(err) {
+                        console.error(err);
+                    });
+
+                if (!image) {
+                    return;
+                }
+
+                if (image.size > 512) {
+                    displayImage(URL.createObjectURL(image));
+                }
+            }, 500);
+
+            // cleanup interval to trim old images
+            // runs every 5 minutes and deletes old image elements > 30s old
+            // (function is defined separately since i needed to debug it)
+            setInterval(cleanupImages, 300_000);
+            function cleanupImages() {
+                const previousCount = root.children.length;
+                for (const image of document.querySelectorAll("#root > img")) {
+                    const timestamp = parseInt(
+                        image.getAttribute("data-timestamp")
+                    );
+
+                    if (Date.now() - 30_000 > timestamp) {
+                        image.remove();
+                    }
+                }
+
+                console.log(
+                    "cleaned up",
+                    previousCount - root.children.length,
+                    "elements"
+                );
+            }
+        </script>
+    </body>
 </html>
