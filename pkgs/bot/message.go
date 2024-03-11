@@ -29,11 +29,14 @@ func checkList(ids []string, target string) bool {
 var (
 	regexDiscordCDN   = regexp.MustCompile(`https:\/\/cdn\.discordapp\.com\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/.+\.(png|jpg|jpeg|webp|gif|avif)\?ex=[a-z0-9]{8}&is=[a-z0-9]{8}&hm=[a-z0-9]{64}&?`)
 	regexDiscordMedia = regexp.MustCompile(`https:\/\/media\.discordapp\.net\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/.+\.(png|jpg|jpeg|webp|gif|avif)\?ex=[a-z0-9]{8}&is=[a-z0-9]{8}&hm=[a-z0-9]{64}(&=&format=webp(&quality=lossless)?&width=[0-9]{1,4}&height=[0-9]{1,4})?&?`)
+	regexDiscordEmoji = regexp.MustCompile(`https:\/\/cdn\.discordapp\.com\/emojis\/[0-9]{18,19}\.webp`)
 	regexTenor        = regexp.MustCompile(`https:\/\/tenor\.com\/view\/[\w\-(%\d{2})]+-[0-9]+`)
 	regexTenorMedia   = regexp.MustCompile(`https:\/\/media1.tenor\.com\/m\/[\w\d]+\/[\w\-]+\.gif`)
 )
 
 func queueImage(url string) {
+	log.Println("processing link =>", strings.TrimPrefix(url, "https://")[:28])
+
 	webapi.Images <- webapi.Image{
 		Url: url,
 	}
@@ -70,36 +73,35 @@ func handleAttachment(e *discordgo.MessageCreate) {
 }
 
 func handleLinks(e *discordgo.MessageCreate) {
-	// check if there are valid links/embeds if no attachments were found
 	message := e.Content
-	matchedCDN := regexDiscordCDN.FindString(message)
-	matchedMediaProxy := regexDiscordMedia.FindString(message)
-	if matchedCDN != "" {
+	matched := regexDiscordCDN.FindString(message)
+	if matched != "" {
 		// mutate cdn url into media proxy to optimize loading
-		converted := strings.ReplaceAll(matchedCDN, "cdn.discordapp.com", "media.discordapp.net")
+		converted := strings.ReplaceAll(matched, "cdn.discordapp.com", "media.discordapp.net")
 		if !strings.Contains(converted, ".gif") {
 			converted = converted + "=&format=webp"
 		}
-
-		log.Println("link found from user", e.Author.Username, "("+e.Author.ID+")")
 
 		queueImage(converted)
 		return
 	}
 
-	if matchedMediaProxy != "" {
-		log.Println("link found from user", e.Author.Username, "("+e.Author.ID+")")
-
-		queueImage(matchedMediaProxy)
+	matched = regexDiscordEmoji.FindString(message)
+	if matched != "" {
+		queueImage(regexDiscordEmoji.FindString(message))
 		return
 	}
 
-	// tenor is weird and doesn't have an easy way to query direct gif links
-	matchedTenor := regexTenor.FindString(message)
-	if matchedTenor != "" {
-		log.Println("link found from user", e.Author.Username, "("+e.Author.ID+")")
+	matched = regexDiscordMedia.FindString(message)
+	if matched != "" {
+		queueImage(matched)
+		return
+	}
 
-		page, err := http.Get(matchedTenor)
+	// tenor is weird and buries their direct gif links
+	matched = regexTenor.FindString(message)
+	if matched != "" {
+		page, err := http.Get(matched)
 		if err != nil {
 			log.Println("warning: failed to crawl tenor webpage")
 			return
@@ -134,14 +136,39 @@ func messageCreate(_ *discordgo.Session, e *discordgo.MessageCreate) {
 		return
 	}
 
-	// see if there are attachments
 	if len(e.Attachments) >= 1 {
 		handleAttachment(e)
 		return
 	}
 
-	if regexDiscordCDN.MatchString(e.Content) || regexDiscordMedia.MatchString(e.Content) || regexTenor.MatchString(e.Content) {
+	text := e.Content
+	if strings.HasPrefix(text, "https://") {
 		handleLinks(e)
 		return
+	}
+
+	if len(e.StickerItems) >= 0 && text == "" {
+		sticker := e.StickerItems[0]
+		extension := ""
+
+		switch sticker.FormatType {
+		case discordgo.StickerFormatTypeGIF:
+			extension = ".gif"
+		case discordgo.StickerFormatTypePNG:
+		case discordgo.StickerFormatTypeAPNG:
+			extension = ".png"
+		default:
+			return
+		}
+
+		queueImage("https://media.discordapp.net/stickers/" + sticker.ID + extension + "?size=320")
+		return
+	}
+
+	emojis := e.GetCustomEmojis()
+	if len(emojis) > 0 {
+		emoji := emojis[0]
+
+		queueImage("https://cdn.discordapp.com/emojis/" + emoji.ID + ".webp?size=128&quality=lossless")
 	}
 }
