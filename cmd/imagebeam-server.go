@@ -17,20 +17,16 @@ var (
 	Token             string
 	PermittedChannels string
 	PermittedUsers    string
-	Port              int
+
+	snowflakeRegex regexp.Regexp = *regexp.MustCompile("[0-9]{18,19}")
 )
 
 func init() {
 	flag.StringVar(&Token, "token", "", "Discord bot authentication token (required)")
 	flag.StringVar(&PermittedChannels, "channels", "", "Channel IDs which will be listened to and processed; assumes the bot has been given permission to the specified channels.\nAccepts a single channel ID, or multiple IDs separated by a single comma.\n(defaults to all available channels)")
 	flag.StringVar(&PermittedUsers, "users", "", "User IDs which will be the sole users processed. Accepts a single user ID, or multiple IDs separated by a single comma. (defaults to all users)")
-	flag.IntVar(&Port, "port", 8440, "The port the web server will use. May break if changed from default.")
+	// flag.IntVar(&Port, "port", 8440, "The port the web server will use. May break if changed from default.")
 	flag.Parse()
-}
-
-func validateSnowflake(id string) bool {
-	matched, err := regexp.MatchString(id, "[0-9]{18,19}")
-	return matched && err == nil
 }
 
 func processIDList(input string) []string {
@@ -38,8 +34,8 @@ func processIDList(input string) []string {
 
 	if strings.Contains(input, ",") {
 		for _, id := range strings.Split(input, ",") {
-			if !validateSnowflake(id) {
-				log.Println("warning: found invalid id ->", id)
+			if !snowflakeRegex.MatchString(id) {
+				log.Println("warning: found invalid id in list ->", id)
 				continue
 			}
 
@@ -49,9 +45,9 @@ func processIDList(input string) []string {
 		return ids
 	}
 
-	if !validateSnowflake(input) {
+	if !snowflakeRegex.MatchString(input) {
 		log.Println("warning: found invalid id ->", input)
-		return []string{} // default to empty array
+		return ids // default to empty array
 	}
 
 	ids = append(ids, input)
@@ -73,6 +69,9 @@ func main() {
 	channels := processIDList(PermittedChannels)
 	users := processIDList(PermittedUsers)
 
+	log.Println("permitted channels =", channels)
+	log.Println("permitted users =", users)
+
 	botConfig := bot.BotConfig{
 		Token:             Token,
 		PermittedChannels: channels,
@@ -87,7 +86,7 @@ func main() {
 
 	defer bot.Close()
 
-	webapi.StartWebAPI(Port)
+	webapi.StartWebAPI(8440)
 
 	log.Println("imagebeam started")
 

@@ -12,12 +12,16 @@ type BotConfig struct {
 	PermittedUsers    []string
 }
 
-func StartDiscordBot(config BotConfig) (session *discordgo.Session, err error) {
-	bot, err := discordgo.New("Bot " + config.Token)
+var config BotConfig
+
+func StartDiscordBot(cfg BotConfig) (session *discordgo.Session, err error) {
+	bot, err := discordgo.New("Bot " + cfg.Token)
 	if err != nil {
 		log.Fatal("error initializing discord bot", err)
 		return nil, err
 	}
+
+	config = cfg
 
 	bot.AddHandler(ready)
 	bot.AddHandler(messageCreate)
