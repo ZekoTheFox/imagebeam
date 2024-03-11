@@ -1,4 +1,7 @@
 .env
-!.env.*
+.env.*
+
+bin/**
 
 spec.md
+setup-env.ps1
