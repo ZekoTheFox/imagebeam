@@ -3,11 +3,8 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
-	"os/signal"
 	"regexp"
 	"strings"
-	"syscall"
 
 	"zeko.party/imagebeam/pkgs/bot"
 	"zeko.party/imagebeam/pkgs/webapi"
@@ -56,7 +53,6 @@ func processIDList(input string) []string {
 
 func main() {
 	log.Println("imagebeam is starting up...")
-
 	log.Println("token = " + strings.Split(Token, ".")[0] + "...") // the first segment is just the bot's id
 
 	if len(PermittedChannels) <= 17 {
@@ -84,15 +80,10 @@ func main() {
 		return
 	}
 
-	defer bot.Close()
-
-	webapi.StartWebAPI(8440)
-
 	log.Println("imagebeam started")
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
-	<-sig
+	defer bot.Close()
+	webapi.StartWebAPI(8440)
 
 	log.Println("shutting down...")
 }

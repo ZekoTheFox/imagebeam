@@ -10,8 +10,9 @@ type Image struct {
 	Url string
 }
 
-var Images chan Image = make(chan Image)
-var imageCache chan []byte = make(chan []byte)
+var (
+	Images chan Image = make(chan Image)
+)
 
 func StartWebAPI(port int) {
 	http.HandleFunc("GET /image", handleImage)

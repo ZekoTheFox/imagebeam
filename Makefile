@@ -5,7 +5,6 @@ run:
  
 # expects `DISCORD_TOKEN` env to be set 
 run-dev: build
-#	go build -o bin/ cmd/imagebeam-server.go 
 	bin/imagebeam-server.exe -token ${DISCORD_TOKEN}
 
 clean-win:

@@ -27,15 +27,15 @@ func checkList(ids []string, target string) bool {
 }
 
 var (
-	regexDiscordCDN   = regexp.MustCompile(`https:\/\/cdn\.discordapp\.com\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/.+\.(png|jpg|jpeg|webp|gif|avif)\?ex=[a-z0-9]{8}&is=[a-z0-9]{8}&hm=[a-z0-9]{64}&?`)
-	regexDiscordMedia = regexp.MustCompile(`https:\/\/media\.discordapp\.net\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/.+\.(png|jpg|jpeg|webp|gif|avif)\?ex=[a-z0-9]{8}&is=[a-z0-9]{8}&hm=[a-z0-9]{64}(&=&format=webp(&quality=lossless)?&width=[0-9]{1,4}&height=[0-9]{1,4})?&?`)
+	regexDiscordCDN   = regexp.MustCompile(`https:\/\/cdn\.discordapp\.com\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/.+\.(png|jpg|jpeg|webp|gif)\?ex=[a-z0-9]{8}&is=[a-z0-9]{8}&hm=[a-z0-9]{64}&?`)
+	regexDiscordMedia = regexp.MustCompile(`https:\/\/media\.discordapp\.net\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/[a-zA-Z0-9_\-\.]+\.(png|jpg|jpeg|webp|gif)\?ex=[0-9a-f]{8}&is=[0-9a-f]{8}&hm=[0-9a-f]{64}(&=&format=webp(&quality=lossless)?&width=[0-9]{1,4}&height=[0-9]{1,4})?&?`)
 	regexDiscordEmoji = regexp.MustCompile(`https:\/\/cdn\.discordapp\.com\/emojis\/[0-9]{18,19}\.webp`)
-	regexTenor        = regexp.MustCompile(`https:\/\/tenor\.com\/view\/[\w\-(%\d{2})]+-[0-9]+`)
-	regexTenorMedia   = regexp.MustCompile(`https:\/\/media1.tenor\.com\/m\/[\w\d]+\/[\w\-]+\.gif`)
+	regexTenor        = regexp.MustCompile(`https:\/\/tenor\.com\/view\/([\w\-]|%[0-9]{2})+-[0-9]+`)
+	regexTenorMedia   = regexp.MustCompile(`https:\/\/media1\.tenor\.com\/m\/[\w\d]+\/[\w\-]+\.gif`)
 )
 
 func queueImage(url string) {
-	log.Println("processing link =>", strings.TrimPrefix(url, "https://")[:28])
+	log.Println("processing link =>", strings.TrimPrefix(url, "https://")[:36]+"...")
 
 	webapi.Images <- webapi.Image{
 		Url: url,
@@ -43,25 +43,23 @@ func queueImage(url string) {
 }
 
 func handleAttachment(e *discordgo.MessageCreate) {
-
 	// only the first attachment will ever be used/shown
 	attachment := e.Attachments[0]
 
-	validContentType := []string{
+	filetype := []string{
 		"image/png",
 		"image/jpeg",
 		"image/webp",
 		"image/gif",
-		"image/avif",
 	}
-	validType := false
-	for _, fileType := range validContentType {
-		if attachment.ContentType == fileType {
-			validType = true
+	valid := false
+	for _, entry := range filetype {
+		if attachment.ContentType == entry {
+			valid = true
 		}
 	}
 
-	if !validType {
+	if !valid {
 		return
 	}
 
@@ -76,7 +74,7 @@ func handleLinks(e *discordgo.MessageCreate) {
 	message := e.Content
 	matched := regexDiscordCDN.FindString(message)
 	if matched != "" {
-		// mutate cdn url into media proxy to optimize loading
+		// change cdn into media proxy url to optimize loading
 		converted := strings.ReplaceAll(matched, "cdn.discordapp.com", "media.discordapp.net")
 		if !strings.Contains(converted, ".gif") {
 			converted = converted + "=&format=webp"
@@ -88,7 +86,7 @@ func handleLinks(e *discordgo.MessageCreate) {
 
 	matched = regexDiscordEmoji.FindString(message)
 	if matched != "" {
-		queueImage(regexDiscordEmoji.FindString(message))
+		queueImage(matched)
 		return
 	}
 
@@ -113,10 +111,7 @@ func handleLinks(e *discordgo.MessageCreate) {
 			return
 		}
 
-		text := string(pageText[:])
-
-		resolvedMedia := regexTenorMedia.FindString(text)
-
+		resolvedMedia := regexTenorMedia.FindString(string(pageText[:]))
 		log.Println("resolved tenor link:", resolvedMedia)
 
 		queueImage(resolvedMedia)
@@ -124,15 +119,7 @@ func handleLinks(e *discordgo.MessageCreate) {
 }
 
 func messageCreate(_ *discordgo.Session, e *discordgo.MessageCreate) {
-	if e.Author.Bot {
-		return
-	}
-
-	if !checkList(config.PermittedChannels, e.ChannelID) {
-		return
-	}
-
-	if !checkList(config.PermittedUsers, e.Author.ID) {
+	if e.Author.Bot || !checkList(config.PermittedChannels, e.ChannelID) || !checkList(config.PermittedUsers, e.Author.ID) {
 		return
 	}
 
@@ -154,10 +141,14 @@ func messageCreate(_ *discordgo.Session, e *discordgo.MessageCreate) {
 		switch sticker.FormatType {
 		case discordgo.StickerFormatTypeGIF:
 			extension = ".gif"
-		case discordgo.StickerFormatTypePNG:
-		case discordgo.StickerFormatTypeAPNG:
+		case discordgo.StickerFormatTypePNG,
+			discordgo.StickerFormatTypeAPNG:
 			extension = ".png"
 		default:
+			return
+		}
+
+		if len(extension) == 0 {
 			return
 		}
 
