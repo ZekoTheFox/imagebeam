@@ -31,10 +31,17 @@ var (
 	regexDiscordMedia = regexp.MustCompile(`https:\/\/media\.discordapp\.net\/attachments\/[0-9]{18,19}\/[0-9]{18,19}\/[a-zA-Z0-9_\-\.]+\.(png|jpg|jpeg|webp|gif)\?ex=[0-9a-f]{8}&is=[0-9a-f]{8}&hm=[0-9a-f]{64}(&=&format=webp(&quality=lossless)?&width=[0-9]{1,4}&height=[0-9]{1,4})?&?`)
 	regexDiscordEmoji = regexp.MustCompile(`https:\/\/cdn\.discordapp\.com\/emojis\/[0-9]{18,19}\.webp`)
 	regexTenor        = regexp.MustCompile(`https:\/\/tenor\.com\/view\/([\w\-]|%[0-9]{2})+-[0-9]+`)
-	regexTenorMedia   = regexp.MustCompile(`https:\/\/media1\.tenor\.com\/m\/[\w\d]+\/[\w\-]+\.gif`)
+	// this media regex may fail at times; its possible that replacing both `[\w\d\-]+` and `[\w\-]+` with just `.+` will make it work slightly more reliably,
+	// but i haven't found a url which actually hits this problem yet
+	regexTenorMedia = regexp.MustCompile(`https:\/\/media1\.tenor\.com\/m\/[\w\d\-]+\/[\w\-]+\.gif`)
 )
 
 func queueImage(url string) {
+	if len(url) <= 0 {
+		log.Println("warning: queueImage was called with empty url")
+		return
+	}
+
 	log.Println("processing link =>", strings.TrimPrefix(url, "https://")[:36]+"...")
 
 	webapi.Images <- webapi.Image{
@@ -112,6 +119,11 @@ func handleLinks(e *discordgo.MessageCreate) {
 		}
 
 		resolvedMedia := regexTenorMedia.FindString(string(pageText[:]))
+		if resolvedMedia != "" {
+			log.Println("warning: failed to resolve direct tenor media link")
+			return
+		}
+
 		log.Println("resolved tenor link:", resolvedMedia)
 
 		queueImage(resolvedMedia)
