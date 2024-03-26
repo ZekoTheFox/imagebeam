@@ -119,7 +119,7 @@ func handleLinks(e *discordgo.MessageCreate) {
 		}
 
 		resolvedMedia := regexTenorMedia.FindString(string(pageText[:]))
-		if resolvedMedia != "" {
+		if resolvedMedia == "" {
 			log.Println("warning: failed to resolve direct tenor media link")
 			return
 		}
